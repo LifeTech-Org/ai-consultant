@@ -159,6 +159,13 @@ const Dashboard = () => {
     }
 
     async function stopConnection() {
+        // Don't send short conversations
+        if (messages.length > 5) {
+            await supabase.from("transcripts").insert({
+                conversation: JSON.stringify(messages),
+                organisation: organisation?.id
+            })
+        }
         if (pcRef.current) {
             pcRef.current.close();
             pcRef.current = null;
@@ -169,22 +176,9 @@ const Dashboard = () => {
         }
         setIsConnected(false);
         toast({
-            title: "Connection Stopped",
-            description: "Your voice agent has been terminated!",
+            title: "Connection Ended!",
+            description: messages.length > 5 ? "Your conversation has been sent to our AI for processing. We will get back to you in no time." : "Your conversation was not sent to be processed as it was too short!",
         });
-        // Don't send short conversations
-        if (messages.length > 5) {
-            await fetch("https://fishnmike5000.app.n8n.cloud/webhook/c4e67e9c-57b6-4537-9ecb-956728aadf13", {
-                method: "POST",
-                body: JSON.stringify({
-                    organisation_id: organisation?.id,
-                    conversation: messages
-                }),
-                headers: {
-                    "Content-Type": "application/json",
-                }
-            })
-        }
     }
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         try {
