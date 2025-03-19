@@ -20,6 +20,7 @@ const supabase = createClient(
 const Dashboard = () => {
     const { toast } = useToast();
     const [organisation, setOrganisation] = useState<{ id: string; email: string; research: string } | null>(null);
+    const [previousConversation, setPreviousConversation] = useState<{ conversation: string }[] | null>(null)
     const pcRef = useRef<RTCPeerConnection>(null); // Store PeerConnection
     const streamRef = useRef<MediaStream>(null); // Store MediaStream
     const [isConnected, setIsConnected] = useState(false);
@@ -111,7 +112,7 @@ const Dashboard = () => {
                     type: "session.update",
                     session: {
                         modalities: ["audio", "text"],
-                        instructions: constructPrompt(organisation!.research),
+                        instructions: constructPrompt(organisation!.research, JSON.stringify(previousConversation), fullName?.split(" ")[0]),
                         input_audio_transcription: {
                             "model": "whisper-1"
                         }
@@ -123,7 +124,7 @@ const Dashboard = () => {
                     type: "response.create",
                     response: {
                         modalities: ["audio", "text"],
-                        instructions: "How can you help me?",
+                        instructions: "Please start the interview process by addressing the client.",
                     },
                 })
             );
@@ -260,11 +261,27 @@ const Dashboard = () => {
                 setOrganisation(data);
             }
         }
+        async function fetchPreviousConversation() {
+            const { data, error } = await supabase
+                .from("transcripts")
+                .select("conversation")
+                .eq("organisation", organisation?.id);
 
-        if (user) {
+            if (error) {
+                toast({
+                    description: `Error fetching past conversation, please refresh!`,
+                });
+            } else {
+                setPreviousConversation(data);
+            }
+        }
+        if (user && !organisation) {
             fetchOrganisation();
         }
-    }, [user, toast])
+        if (organisation) {
+            fetchPreviousConversation();
+        }
+    }, [user, toast, organisation])
 
     const fullName = user?.unsafeMetadata.fullName as string;
     return (
@@ -342,7 +359,7 @@ const Dashboard = () => {
                                             disabled={!organisation}
                                             className={`w-full ${isConnected ? 'bg-red-500 hover:bg-red-600' : 'bg-[#9b87f5] hover:bg-[#8a76e4]'}`}
                                         >
-                                            {organisation ? (isConnected ? 'Stop Voice Agent' : 'Start Voice Agent') : <FiLoader className="animate-spin mr-2" />}
+                                            {(organisation && !!previousConversation) ? (isConnected ? 'Stop Voice Agent' : 'Start Voice Agent') : <FiLoader className="animate-spin mr-2" />}
                                         </Button>
                                     </div>
                                 </div>
