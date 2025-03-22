@@ -2,6 +2,7 @@
 "use client"
 /* eslint-disable react/no-unescaped-entities */
 import React, { useEffect, useRef, useState } from 'react';
+import Tesseract from "tesseract.js";
 import { Mic, Upload, LogOut } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 import { Card, CardContent } from '../components/ui/card';
@@ -19,8 +20,9 @@ const supabase = createClient(
 
 const Dashboard = () => {
     const { toast } = useToast();
-    const [organisation, setOrganisation] = useState<{ id: string; email: string; research: string } | null>(null);
-    const [previousConversation, setPreviousConversation] = useState<{ conversation: string }[] | null>(null)
+    const [organisation, setOrganisation] = useState<{ id: string; email: string; research: string, files_content: string[] } | null>(null);
+    const [previousConversation, setPreviousConversation] = useState<{ conversation: string }[] | null>(null);
+    const [prompt, setPrompt] = useState<string | null>(null);
     const pcRef = useRef<RTCPeerConnection>(null); // Store PeerConnection
     const streamRef = useRef<MediaStream>(null); // Store MediaStream
     const [isConnected, setIsConnected] = useState(false);
@@ -111,8 +113,7 @@ const Dashboard = () => {
                 JSON.stringify({
                     type: "session.update",
                     session: {
-                        modalities: ["audio", "text"],
-                        instructions: constructPrompt(organisation!.research, JSON.stringify(previousConversation), fullName?.split(" ")[0]),
+
                         input_audio_transcription: {
                             "model": "whisper-1"
                         }
@@ -124,7 +125,7 @@ const Dashboard = () => {
                     type: "response.create",
                     response: {
                         modalities: ["audio", "text"],
-                        instructions: "Please start the interview process by addressing the client.",
+                        instructions: constructPrompt(prompt!, organisation!.research, JSON.stringify(previousConversation), fullName?.split(" ")[0], JSON.stringify(organisation?.files_content)),
                     },
                 })
             );
@@ -187,6 +188,8 @@ const Dashboard = () => {
             if (!e.target.files || e.target.files.length === 0) return;
 
             const file = e.target.files[0];
+            const { data: { text } } = await Tesseract.recognize(file, "eng", {
+            });
             const filePath = `${user!.id}/${Date.now()}-${file.name}`;
 
             // Upload file to Supabase Storage
@@ -206,7 +209,7 @@ const Dashboard = () => {
             // Fetch existing files array
             const { data: orgData, error: fetchError } = await supabase
                 .from("organisations")
-                .select("files")
+                .select("files, files_content")
                 .eq("email", user?.primaryEmailAddress?.emailAddress)
                 .single();
 
@@ -218,11 +221,12 @@ const Dashboard = () => {
                 return;
             }
 
-            const existingFiles: string[] = orgData?.files || []; // Default to empty array if null
+            const existingFiles: string[] = orgData?.files || [];
+            const existingFilesContent: string[] = orgData?.files_content || [];
             // Update the row with the new file URL
             const { error: updateError } = await supabase
                 .from("organisations")
-                .update({ files: [...existingFiles, fileUrl] }) // Append new file URL
+                .update({ files: [...existingFiles, fileUrl], files_content: [...existingFilesContent, text] }) // Append new file URL
                 .eq("email", user?.primaryEmailAddress?.emailAddress);
 
             if (updateError) {
@@ -233,6 +237,7 @@ const Dashboard = () => {
                 return;
             }
             setisUploading(false);
+            setOrganisation({ ...organisation!, files_content: [...organisation!.files_content, text] });
             toast({
                 title: "File uploaded",
                 description: `${file.name} has been uploaded successfully.`,
@@ -275,13 +280,32 @@ const Dashboard = () => {
                 setPreviousConversation(data);
             }
         }
+        async function fetchPrompt() {
+            const { data, error } = await supabase
+                .from("prompt")
+                .select("content")
+                .order("id", { ascending: false }) // Assuming 'id' is the primary key
+                .limit(1)
+                .single();
+
+            if (error) {
+                toast({
+                    description: `Error fetching prompt, please refresh!`,
+                });
+            } else {
+                setPrompt(data.content);
+            }
+        }
+        if (!prompt) {
+            fetchPrompt();
+        }
         if (user && !organisation) {
             fetchOrganisation();
         }
         if (organisation) {
             fetchPreviousConversation();
         }
-    }, [user, toast, organisation])
+    }, [user, toast, organisation, prompt])
 
     const fullName = user?.unsafeMetadata.fullName as string;
     return (
@@ -359,7 +383,7 @@ const Dashboard = () => {
                                             disabled={!organisation}
                                             className={`w-full ${isConnected ? 'bg-red-500 hover:bg-red-600' : 'bg-[#9b87f5] hover:bg-[#8a76e4]'}`}
                                         >
-                                            {(organisation && !!previousConversation) ? (isConnected ? 'Stop Voice Agent' : 'Start Voice Agent') : <FiLoader className="animate-spin mr-2" />}
+                                            {(organisation && !!previousConversation && prompt) ? (isConnected ? 'Stop Voice Agent' : 'Start Voice Agent') : <FiLoader className="animate-spin mr-2" />}
                                         </Button>
                                     </div>
                                 </div>
@@ -382,6 +406,7 @@ const Dashboard = () => {
                                                 type="file"
                                                 className="hidden"
                                                 onChange={handleFileUpload}
+                                                accept=".png, .jpg, .jpeg, .bmp, .pbm"
                                             />
                                             <div className="w-full flex items-center justify-center  h-10 px-4 bg-[#1EAEDB] hover:bg-[#0FA0CE] text-white rounded-md text-center cursor-pointer">
                                                 {!isUploading ? "Upload Files" : <FiLoader className="animate-spin mr-2" />}
