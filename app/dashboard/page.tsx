@@ -113,7 +113,7 @@ const Dashboard = () => {
                 JSON.stringify({
                     type: "session.update",
                     session: {
-
+                        instructions: prompt,
                         input_audio_transcription: {
                             "model": "whisper-1"
                         }
@@ -124,8 +124,8 @@ const Dashboard = () => {
                 JSON.stringify({
                     type: "response.create",
                     response: {
+                        instructions: constructPrompt(organisation!.research, JSON.stringify(previousConversation), fullName?.split(" ")[0], JSON.stringify(organisation?.files_content)),
                         modalities: ["audio", "text"],
-                        instructions: constructPrompt(prompt!, organisation!.research, JSON.stringify(previousConversation), fullName?.split(" ")[0], JSON.stringify(organisation?.files_content)),
                     },
                 })
             );
