@@ -8,7 +8,6 @@ import { useToast } from '../hooks/use-toast';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { createClient } from "@supabase/supabase-js";
-import { constructPrompt } from './prompt';
 import { useClerk, useSignIn, useUser } from '@clerk/nextjs';
 import { FiLoader } from 'react-icons/fi';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog';
@@ -21,8 +20,6 @@ const supabase = createClient(
 const Dashboard = () => {
     const { toast } = useToast();
     const [organisation, setOrganisation] = useState<{ id: string; email: string; research: string, files_content: string[] } | null>(null);
-    const [previousConversation, setPreviousConversation] = useState<{ conversation: string }[] | null>(null);
-    const [prompt, setPrompt] = useState<string | null>(null);
     const pcRef = useRef<RTCPeerConnection>(null); // Store PeerConnection
     const streamRef = useRef<MediaStream>(null); // Store MediaStream
     const [isConnected, setIsConnected] = useState(false);
@@ -79,7 +76,8 @@ const Dashboard = () => {
 
         });
         const tokenResponse = await fetch(
-            "https://fishnmike5000.app.n8n.cloud/webhook/e41fd4de-290e-4d8a-92de-2b0e452da65f"
+            "https://fishnmike5000.app.n8n.cloud/webhook/e41fd4de-290e-4d8a-92de-2b0e452da65f",
+            { method: "POST", body: JSON.stringify({ email: user?.emailAddresses[0].emailAddress }), headers: { "Content-Type": "application/json" } }
         );
         const data = await tokenResponse.json();
         const EPHEMERAL_KEY = data.EPHEMERAL_KEY;
@@ -107,25 +105,11 @@ const Dashboard = () => {
                 title: "Connection established!",
                 description: "Your voice agent is now active...",
             });
-
-            // Send an event to start voice output
-            dc.send(
-                JSON.stringify({
-                    type: "session.update",
-                    session: {
-                        instructions: prompt,
-                        input_audio_transcription: {
-                            "model": "whisper-1"
-                        }
-                    },
-                })
-            );
             dc.send(
                 JSON.stringify({
                     type: "response.create",
                     response: {
-                        instructions: constructPrompt(organisation!.research, JSON.stringify(previousConversation), fullName?.split(" ")[0], JSON.stringify(organisation?.files_content)),
-                        modalities: ["audio", "text"],
+                        instructions: "Begin Conversation with the greeting specified in the instruction and move on to other things as intelligently deduced from the context and instuctions given."
                     },
                 })
             );
@@ -266,46 +250,10 @@ const Dashboard = () => {
                 setOrganisation(data);
             }
         }
-        async function fetchPreviousConversation() {
-            const { data, error } = await supabase
-                .from("transcripts")
-                .select("conversation")
-                .eq("organisation", organisation?.id);
-
-            if (error) {
-                toast({
-                    description: `Error fetching past conversation, please refresh!`,
-                });
-            } else {
-                setPreviousConversation(data);
-            }
-        }
-        async function fetchPrompt() {
-            const { data, error } = await supabase
-                .from("prompt")
-                .select("content")
-                .order("id", { ascending: false }) // Assuming 'id' is the primary key
-                .limit(1)
-                .single();
-
-            if (error) {
-                toast({
-                    description: `Error fetching prompt, please refresh!`,
-                });
-            } else {
-                setPrompt(data.content);
-            }
-        }
-        if (!prompt) {
-            fetchPrompt();
-        }
         if (user && !organisation) {
             fetchOrganisation();
         }
-        if (organisation) {
-            fetchPreviousConversation();
-        }
-    }, [user, toast, organisation, prompt])
+    }, [user, toast, organisation])
 
     const fullName = user?.unsafeMetadata.fullName as string;
     return (
@@ -383,7 +331,7 @@ const Dashboard = () => {
                                             disabled={!organisation}
                                             className={`w-full ${isConnected ? 'bg-red-500 hover:bg-red-600' : 'bg-[#9b87f5] hover:bg-[#8a76e4]'}`}
                                         >
-                                            {(organisation && !!previousConversation && prompt) ? (isConnected ? 'Stop Voice Agent' : 'Start Voice Agent') : <FiLoader className="animate-spin mr-2" />}
+                                            {(organisation) ? (isConnected ? 'Stop Voice Agent' : 'Start Voice Agent') : <FiLoader className="animate-spin mr-2" />}
                                         </Button>
                                     </div>
                                 </div>
