@@ -293,7 +293,7 @@ const Dashboard = () => {
             <main className="flex-1 py-8 px-6">
                 <div className="max-w-7xl mx-auto">
                     {/* Introduction Message */}
-                    <Card className="mb-8 shadow-sm border-0">
+                    {/* <Card className="mb-8 shadow-sm border-0">
                         <CardContent className="p-6">
                             <h2 className="text-xl font-medium text-[#1A1F2C] mb-3">Welcome to your AI Readiness Dashboard</h2>
                             <p className="text-[#4A5568] leading-relaxed">
@@ -305,7 +305,7 @@ const Dashboard = () => {
                                 Cheers, Mike
                             </p>
                         </CardContent>
-                    </Card>
+                    </Card> */}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         {/* Voice Agent Card */}
